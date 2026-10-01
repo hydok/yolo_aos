@@ -6,7 +6,7 @@
 
 ## 요약
 
-- 이 앱에는 **AGPL-3.0** 모델인 YOLO11n이 들어 있습니다. 그래서 앱을 배포하려면 **앱 전체 소스를 AGPL-3.0으로 공개**하거나, Ultralytics **Enterprise 라이선스**를 구매해야 합니다.
+- 이 앱에는 **AGPL-3.0** 모델인 YOLO26n 4종(검출·분할·깊이·자세)이 들어 있습니다. 그래서 앱을 배포하려면 **앱 전체 소스를 AGPL-3.0으로 공개**하거나, Ultralytics **Enterprise 라이선스**를 구매해야 합니다.
 - 그 밖의 구성요소(MediaPipe, LiteRT, AndroidX 등)는 대부분 **Apache-2.0**이라 상업적 이용이 자유롭습니다. 라이선스 고지만 지키면 됩니다.
 - 현재 이 저장소에는 프로젝트 자체의 `LICENSE` 파일이 없습니다. 공개 저장소로 유지하려면 AGPL-3.0 `LICENSE` 파일을 추가하는 것을 권장합니다.
 
@@ -16,7 +16,7 @@
 
 | 모델 | 파일 | 라이선스 | 출처 |
 | --- | --- | --- | --- |
-| YOLO11n (Ultralytics) | `yolo11n.tflite` | **AGPL-3.0** | [Ultralytics License](https://www.ultralytics.com/license) |
+| YOLO26n 검출·분할·깊이·자세 (Ultralytics) | `yolo26n.tflite`, `yolo26n-seg.tflite`, `yolo26n-depth.tflite`, `yolo26n-pose.tflite` | **AGPL-3.0** | [Ultralytics License](https://www.ultralytics.com/license), 모델 메타데이터 |
 | Selfie Segmentation | `selfie_segmenter.tflite` | Apache-2.0 | 모델 카드 |
 | BlazeFace + Face Mesh V2 + Blendshape V2 | `face_landmarker.task` | Apache-2.0 | 모델 카드 3종 |
 | Hand Tracking | `gesture_recognizer.task` (손 관절 부분) | Apache-2.0 | 모델 카드 |
@@ -46,10 +46,11 @@ MediaPipe 모델 카드는 [MediaPipe 솔루션 가이드](https://ai.google.dev
 
 | 데이터셋 | 사용 모델 | 비고 |
 | --- | --- | --- |
-| COCO | YOLO11n, EfficientDet-Lite0 | 주석은 CC BY 4.0 |
+| COCO | YOLO26n 검출·분할·자세, EfficientDet-Lite0 | 주석은 CC BY 4.0 |
+| Ultralytics 깊이 학습용 혼합 데이터셋 | YOLO26n 깊이 | 구성 데이터셋이 공개되어 있지 않음 |
 | ImageNet | EfficientNet-Lite0 | 데이터셋 이용 약관은 비상업 연구용 |
 
-## AGPL-3.0 (YOLO11n) 조건
+## AGPL-3.0 (YOLO26n) 조건
 
 Ultralytics는 사전학습 모델뿐 아니라 **직접 학습한 모델과 변환한 모델**(`.tflite` 포함)도 AGPL-3.0 대상이라고 밝히고 있습니다.
 
@@ -85,7 +86,7 @@ Enterprise 라이선스가 필요한 경우:
 | 비공개 소스 상업 앱 (YOLO 포함) | 조건부 | Ultralytics Enterprise 라이선스 구매 |
 | 비공개 소스 상업 앱 (YOLO 제거, MediaPipe만) | 가능 | 앱 내 Apache-2.0 고지, ※ 표시 모델 라이선스 확인 |
 
-YOLO 없이 비공개 상업 앱으로 내려면 `yolo11n.tflite`, `YoloDetector.kt`, 그리고 첫 화면의 YOLO 선택지를 빼면 됩니다. 이 경우 사물 검출은 MediaPipe의 EfficientDet-Lite0로 대신할 수 있습니다.
+YOLO 없이 비공개 상업 앱으로 내려면 `yolo26n*.tflite` 4개, `YoloDetector.kt`, 그리고 첫 화면의 YOLO 선택지를 빼면 됩니다. 이 경우 사물 검출은 MediaPipe의 EfficientDet-Lite0로 대신할 수 있습니다.
 
 ## 참고 링크
 

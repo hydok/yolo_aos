@@ -1,15 +1,17 @@
 # yolo_aos
-YOLO 11n 모델을 활용한 OnDevice AI 사물 인식 (Android)
+YOLO26n 모델을 활용한 OnDevice AI 사물 인식 (Android)
 
 카메라 화면 위에 AI 인식 결과를 실시간으로 그리는 앱입니다. 첫 화면에서 두 엔진 중 하나를 고릅니다.
 
-- **YOLO11n**: 사물 검출 (COCO 80종)
+- **YOLO26n**: 검출, 분할, 깊이, 자세
 - **MediaPipe**: 배경 분리, 사물 검출, 이미지 분류, 얼굴, 손·제스처, 자세
 
 서버 없이 모든 추론을 기기 안에서 처리합니다.
 
 <p align="center">
   <img src="screenshot.gif" width="320" alt="YOLO11n 실기기 실행 화면: 노트북, 컵, 병, 키보드, 마우스 인식" />
+  <br />
+  <sub>실기기 사물 검출 화면 (YOLO11n 버전에서 녹화)</sub>
 </p>
 
 ## 주요 기능
@@ -18,9 +20,16 @@ YOLO 11n 모델을 활용한 OnDevice AI 사물 인식 (Android)
 - 첫 화면에서 엔진 선택, 뒤로가기로 첫 화면 복귀
 - CameraX 카메라 프리뷰 (전체 화면, 권한 요청 포함)
 
-### YOLO11n
-- COCO 80종 실시간 사물 검출, 박스 + 라벨(`이름 점수%`) 표시
-- 프레임 간 위치 보간으로 부드러운 박스 이동
+### YOLO26n
+하단 버튼으로 기능을 전환합니다.
+
+| 기능 | 화면에 보이는 것 |
+| --- | --- |
+| 검출 | 박스 + 라벨(`이름 점수%`), COCO 80종. 프레임 간 위치 보간으로 박스가 부드럽게 이동 |
+| 분할 | 사물 윤곽대로 반투명 색칠 + 박스·라벨, COCO 80종 |
+| 깊이 | 화면 전체를 거리별 색으로 표시 (가까움 빨강 → 멂 파랑) |
+| 자세 | 사람마다 관절 17개 골격 |
+
 - 라벨·입력 크기·클래스 수를 모델 파일에서 자동으로 읽음 → 모델 파일만 바꾸면 커스텀 모델 사용 가능
 - GPU 델리게이트 우선 시도, 실패 시 CPU(4스레드)로 자동 전환
 
@@ -46,7 +55,7 @@ YOLO 11n 모델을 활용한 OnDevice AI 사물 인식 (Android)
 | 카메라 | CameraX 1.6.2 (`LifecycleCameraController`, `PreviewView`) |
 | 추론 (YOLO) | LiteRT 1.4.2 (`litert`, `litert-gpu`) |
 | 추론 (MediaPipe) | MediaPipe Tasks Vision 1.0.0 (`tasks-vision`) |
-| 모델 | YOLO11n `.tflite` + MediaPipe 공식 모델 6종 |
+| 모델 | YOLO26n `.tflite` 4종 + MediaPipe 공식 모델 6종 |
 | 빌드 | AGP 9.4.1, minSdk 26, targetSdk 37 |
 
 ## 프로젝트 구조
@@ -54,7 +63,10 @@ YOLO 11n 모델을 활용한 OnDevice AI 사물 인식 (Android)
 ```
 app/src/main/
 ├── assets/
-│   ├── yolo11n.tflite                # YOLO 모델 (메타데이터 포함)
+│   ├── yolo26n.tflite                # YOLO 검출 (메타데이터 포함)
+│   ├── yolo26n-seg.tflite            # YOLO 분할
+│   ├── yolo26n-depth.tflite          # YOLO 깊이
+│   ├── yolo26n-pose.tflite           # YOLO 자세
 │   ├── selfie_segmenter.tflite       # MediaPipe 배경 분리
 │   ├── efficientdet_lite0.tflite     # MediaPipe 사물 검출
 │   ├── efficientnet_lite0.tflite     # MediaPipe 이미지 분류
@@ -62,8 +74,8 @@ app/src/main/
 │   ├── gesture_recognizer.task       # MediaPipe 손·제스처
 │   └── pose_landmarker_lite.task     # MediaPipe 자세
 ├── java/hydok/yolo/
-│   ├── MainActivity.kt               # 권한, 엔진 선택 화면, YOLO 카메라 화면·오버레이
-│   ├── YoloDetector.kt               # YOLO 모델 로드, 전처리, 추론, NMS
+│   ├── MainActivity.kt               # 권한, 엔진 선택 화면, YOLO 카메라 화면·기능 전환·오버레이
+│   ├── YoloDetector.kt               # YOLO 4개 기능 모델 로드, 전처리, 추론, 후처리
 │   ├── mediapipe/
 │   │   ├── MediaPipeAnalyzer.kt      # MediaPipe 6개 기능 모델 로드, 추론, 배경 합성
 │   │   └── MediaPipeScreen.kt        # MediaPipe 카메라 화면, 기능 전환, 결과 그리기
@@ -73,19 +85,24 @@ app/src/main/
 
 ## 동작 방식
 
-### YOLO11n
+### YOLO26n
 
 ```
 카메라 프레임 (ImageAnalysis, RGBA)
   → 프리뷰에 보이는 영역만 크롭 → 회전 보정 → 640×640 레터박스 (남는 곳은 회색)
   → NCHW float32 (0~1) 변환
   → LiteRT 추론
-  → 신뢰도 0.4 이상 후보 추림 → 클래스별 NMS (IoU 0.5)
+  → 기능별 후처리 (아래)
   → 레터박스 좌표를 프리뷰 기준(0~1)으로 환산
-  → Compose Canvas에 박스·라벨 그리기 (매 화면 프레임마다 30%씩 새 위치로 보간)
+  → Compose Canvas에 그리기
 ```
 
+- **검출**: 신뢰도 0.4 이상 후보 추림 → 클래스별 NMS (IoU 0.5) → 박스를 매 화면 프레임마다 30%씩 새 위치로 보간
+- **분할**: 검출과 같은 방식으로 박스를 고른 뒤, 박스마다 마스크 계수 32개와 마스크 원형(160×160) 32장을 곱해 더함 → 0보다 큰 픽셀을 박스 안에서만 색칠
+- **깊이**: 픽셀마다 거리(미터 추정값)가 나옴 → 화면 안 최솟값~최댓값을 색으로 매핑. 절대 거리보다 상대적인 멀고 가까움을 보는 용도
+- **자세**: 사람 박스를 NMS로 고른 뒤, 관절별 가시성 0.5 이상인 점만 연결
 - 모델 입력은 비율을 유지하는 레터박스 방식입니다. 늘려서 맞추면 사물이 찌그러져 정확도가 떨어집니다.
+- 기능을 바꾸면 이전 모델을 닫고 새 모델을 불러옵니다.
 
 ### MediaPipe
 
@@ -105,14 +122,19 @@ app/src/main/
 
 ## YOLO 모델 규격
 
-| 항목 | 값 |
-| --- | --- |
-| 입력 | `[1, 3, 640, 640]` float32, RGB, 0~1, **NCHW** |
-| 출력 | `[1, 84, 8400]` float32 — 앞 4개: `cx, cy, w, h`(0~1 정규화), 뒤 80개: 클래스 점수 |
-| NMS | 미포함 (앱에서 처리) |
-| 메타데이터 | 모델 파일 끝에 zip으로 `metadata.json` 포함 (`names`, `imgsz` 등) |
+네 모델 모두 입력은 `[1, 3, 640, 640]` float32, RGB, 0~1, **NCHW**입니다. 일반적인 TFLite 예제(NHWC)와 채널 순서가 다르니 주의하세요.
 
-일반적인 TFLite 예제(NHWC)와 채널 순서가 다르니 주의하세요.
+| 기능 | 파일 | 크기 | 출력 |
+| --- | --- | --- | --- |
+| 검출 | `yolo26n.tflite` | 10.0MB | `[1, 84, 8400]` — `cx, cy, w, h`(0~1) + 클래스 점수 80개 |
+| 분할 | `yolo26n-seg.tflite` | 11.3MB | `[1, 116, 8400]` — 검출과 같음 + 마스크 계수 32개 / `[1, 32, 160, 160]` 마스크 원형 |
+| 깊이 | `yolo26n-depth.tflite` | 20.8MB | `[1, 1, 640, 640]` — 픽셀별 거리(미터) |
+| 자세 | `yolo26n-pose.tflite` | 12.2MB | `[1, 56, 8400]` — `cx, cy, w, h` + 사람 점수 + 관절 17개 × (`x, y, 가시성`) |
+
+- 좌표는 모두 640×640 입력 기준 0~1로 정규화되어 나옵니다.
+- NMS는 포함되지 않아 앱에서 처리합니다. (YOLO26은 원래 NMS 없는 구조를 지원하지만, 이번 LiteRT 변환본은 그 기능이 꺼진 형식으로 나옵니다.)
+- 모델 파일 끝에 zip으로 `metadata.json`이 붙어 있습니다 (`names`, `imgsz`, 자세 모델은 `kpt_shape` 등).
+- 깊이 모델은 연산량이 검출의 약 6배(32.5 GFLOPs)라 가장 느립니다.
 
 ## MediaPipe 모델
 
@@ -143,15 +165,29 @@ python3.12 -m venv venv
 ./venv/bin/pip install ultralytics
 ```
 
+기능별로 한 번씩 내보냅니다. 가중치 파일은 처음 실행할 때 자동으로 내려받습니다.
+
 ```bash
-./venv/bin/yolo export model=yolo11n.pt format=tflite imgsz=640
+./venv/bin/yolo export model=yolo26n.pt format=tflite imgsz=640
 ```
 
-생성된 `yolo11n.tflite`를 `app/src/main/assets/`에 넣으면 됩니다. (`format=tflite`는 현재 `litert` 포맷으로 자동 전환되어 내보내집니다.)
+```bash
+./venv/bin/yolo export model=yolo26n-seg.pt format=tflite imgsz=640
+```
+
+```bash
+./venv/bin/yolo export model=yolo26n-depth.pt format=tflite imgsz=640
+```
+
+```bash
+./venv/bin/yolo export model=yolo26n-pose.pt format=tflite imgsz=640
+```
+
+생성된 `.tflite` 파일을 `app/src/main/assets/`에 넣으면 됩니다. (`format=tflite`는 현재 `litert` 포맷으로 자동 전환되어 내보내집니다.)
 
 ### 커스텀 모델 사용
 
-직접 학습한 YOLO 검출 모델도 같은 방식으로 내보내 `app/src/main/assets/yolo11n.tflite`를 교체하면 됩니다. 라벨, 입력 크기, 클래스 수는 모델에서 읽으므로 코드 수정이 필요 없습니다. 파일 이름을 바꾸려면 `YoloDetector.kt`의 `MODEL` 상수를 수정하세요.
+직접 학습한 YOLO 검출·분할·자세 모델도 같은 방식으로 내보내 해당 파일을 교체하면 됩니다. 라벨, 입력 크기, 클래스 수는 모델에서 읽으므로 코드 수정이 필요 없습니다. 파일 이름을 바꾸려면 `YoloDetector.kt`의 `YoloTask`에서 수정하세요.
 
 ## 조정 가능한 값
 
@@ -161,6 +197,7 @@ python3.12 -m venv venv
 | --- | --- | --- | --- |
 | `CONFIDENCE_THRESHOLD` | `YoloDetector.kt` | 0.4 | 낮추면 더 많이 잡고 오검출도 늘어남 |
 | `IOU_THRESHOLD` | `YoloDetector.kt` | 0.5 | 겹친 박스를 하나로 합치는 기준 |
+| `KEYPOINT_THRESHOLD` | `YoloDetector.kt` | 0.5 | 자세에서 이 값보다 가시성이 낮은 관절은 그리지 않음 |
 | `SMOOTHING` | `MainActivity.kt` | 0.3 | 높이면 박스가 빨리 따라붙고, 낮추면 더 부드러움 |
 
 ### MediaPipe (`MediaPipeAnalyzer.kt`)
@@ -177,6 +214,6 @@ python3.12 -m venv venv
 
 - **LiteRT 버전**: 최신 2.x(2.1.6, 2.2.0)는 `litert`와 `litert-api`의 네임스페이스 충돌로 이 AGP 버전에서 빌드가 실패해 1.4.2를 사용합니다.
 - **GPU**: YOLO는 GPU를 먼저 시도하고, 실패하면 CPU를 씁니다(에뮬레이터는 CPU). MediaPipe는 CPU로 추론합니다.
-- **APK 크기**: 디버그 APK는 약 134MB입니다. 4가지 CPU 아키텍처용 네이티브 라이브러리와 압축하지 않은 모델(총 약 39MB)이 들어 있기 때문입니다. 플레이스토어(AAB) 배포 시 사용자는 자기 폰에 맞는 아키텍처만 받으므로 훨씬 작아집니다.
+- **APK 크기**: 디버그 APK는 약 179MB입니다. 4가지 CPU 아키텍처용 네이티브 라이브러리와 압축하지 않은 모델(YOLO 54MB + MediaPipe 28MB)이 들어 있기 때문입니다. 플레이스토어(AAB) 배포 시 사용자는 자기 폰에 맞는 아키텍처만 받으므로 훨씬 작아집니다.
 - **표시 언어**: 분류, 표정, 제스처 결과는 모델이 주는 영어 이름 그대로 표시됩니다.
-- **라이선스**: YOLO11 모델은 Ultralytics의 AGPL-3.0 라이선스를 따르므로, YOLO를 포함해 배포할 때는 AGPL 조건 확인이 필요합니다. MediaPipe 라이브러리는 Apache-2.0이며, 각 모델의 라이선스는 MediaPipe 문서의 모델 카드에서 확인하세요. 자세한 내용은 [LICENSES.md](LICENSES.md)를 참고하세요.
+- **라이선스**: YOLO26 모델은 Ultralytics의 AGPL-3.0 라이선스를 따르므로, YOLO를 포함해 배포할 때는 AGPL 조건 확인이 필요합니다. MediaPipe 라이브러리는 Apache-2.0이며, 각 모델의 라이선스는 MediaPipe 문서의 모델 카드에서 확인하세요. 자세한 내용은 [LICENSES.md](LICENSES.md)를 참고하세요.
