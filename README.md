@@ -64,20 +64,6 @@ app/src/main/
 
 일반적인 TFLite 예제(NHWC)와 채널 순서가 다르니 주의하세요.
 
-## 빌드 및 실행
-
-1. Android Studio로 프로젝트 열기
-2. 폰을 USB(또는 무선 디버깅)로 연결
-3. Run(▶) 실행 → 카메라 권한 허용
-
-명령줄로 설치하려면:
-
-```bash
-./gradlew :app:installDebug
-```
-
-Logcat에서 `YoloDetector`로 필터하면 GPU/CPU 중 어느 쪽으로 추론하는지 보입니다 (`Running on GPU` / `Running on CPU`).
-
 ## 모델 다시 만들기
 
 Python 3.12 환경에서 진행했습니다. (3.14는 변환 도구 호환 문제가 있음)
