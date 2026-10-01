@@ -12,10 +12,21 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
+import androidx.compose.runtime.saveable.rememberSaveable
+import hydok.yolo.mediapipe.MediaPipeScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,11 +82,54 @@ fun CameraScreen() {
         if (!hasPermission) launcher.launch(Manifest.permission.CAMERA)
     }
 
-    if (hasPermission) {
-        CameraPreview(modifier = Modifier.fillMaxSize())
-    } else {
+    var engine by rememberSaveable { mutableStateOf<Engine?>(null) }
+    BackHandler(enabled = engine != null) { engine = null }
+
+    if (!hasPermission) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(text = "카메라 권한이 필요합니다")
+        }
+        return
+    }
+    when (engine) {
+        null -> HomeScreen(onSelect = { engine = it })
+        Engine.YOLO -> CameraPreview(modifier = Modifier.fillMaxSize())
+        Engine.MEDIAPIPE -> MediaPipeScreen(modifier = Modifier.fillMaxSize())
+    }
+}
+
+enum class Engine { YOLO, MEDIAPIPE }
+
+@Composable
+fun HomeScreen(onSelect: (Engine) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .systemBarsPadding()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
+    ) {
+        Text(text = "사용할 엔진을 선택하세요", style = MaterialTheme.typography.headlineSmall)
+        EngineCard(
+            title = "YOLO11n",
+            description = "사물 검출 (COCO 80종)",
+            onClick = { onSelect(Engine.YOLO) }
+        )
+        EngineCard(
+            title = "MediaPipe",
+            description = "배경 분리 · 사물 검출 · 이미지 분류 · 얼굴 · 손·제스처 · 자세",
+            onClick = { onSelect(Engine.MEDIAPIPE) }
+        )
+    }
+}
+
+@Composable
+private fun EngineCard(title: String, description: String, onClick: () -> Unit) {
+    OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(text = title, style = MaterialTheme.typography.titleLarge)
+            Text(text = description, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
